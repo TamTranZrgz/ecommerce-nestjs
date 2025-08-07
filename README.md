@@ -18,3 +18,4 @@ Shopee Clone API
 
 - Autentication & Authorization: JWT
 - Verification: OTP code (register, forgot_password)
+- Send email: Resend, React email
