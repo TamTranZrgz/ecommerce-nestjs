@@ -16,6 +16,6 @@ Shopee Clone API
 
 ### 2. Functions:
 
-- Autentication & Authorization: JWT
+- Autentication & Authorization: JWT (role & permissions)
 - Verification: OTP code (register, forgot_password)
 - Send email: Resend, React email

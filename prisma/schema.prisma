@@ -81,6 +81,8 @@ model User {
   sentMessages                Message[]             @relation("FromUser")
   receivedMessages            Message[]             @relation("ToUser")
 
+  devices                     Device[]
+
   // 1 user có thể tạo ra nhiều user khác
   // 1 user chỉ có thể được tạo ra bởi 1 user khác
   // Tự quan hệ 1-n
@@ -92,9 +94,24 @@ model User {
   updatedBy    User?  @relation("UpdatorUsers", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
   updatedUsers User[] @relation("UpdatorUsers")
 
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Device {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent       String
+  
+  ip              String
+  
+  lastActive      DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  
+  isActive        Boolean   @default(true)
+  refreshTokens   RefreshToken[]
 }
 
 model UserTranslation {
@@ -111,31 +128,34 @@ model UserTranslation {
   updatedById Int?
   updatedBy   User? @relation("UserTranslationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
-  deletedAt DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model VerificationCode {
-  id    Int                  @id @default(autoincrement())
-  email String               @unique @db.VarChar(500)
-  code  String               @db.VarChar(50)
-  type  VerificationCodeType
+  id          Int                  @id @default(autoincrement())
+  email       String               @unique @db.VarChar(500)
+  code        String               @db.VarChar(50)
+  type        VerificationCodeType
 
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
 
   @@index([email, code, type])
   @@index([expiresAt]) // for cron job
 }
 
 model RefreshToken {
-  token  String @unique @db.VarChar(1000)
-  userId Int
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  token       String  @unique @db.VarChar(1000)
+  userId      Int
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  deviceId    Int
+  device      Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
 
   @@index([expiresAt])
 }
