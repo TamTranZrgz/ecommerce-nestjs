@@ -107,7 +107,7 @@ model Device {
   
   ip              String
   
-  lastActive      DateTime  @default(now())
+  lastActive      DateTime  @updatedAt
   createdAt       DateTime  @default(now())
   
   isActive        Boolean   @default(true)

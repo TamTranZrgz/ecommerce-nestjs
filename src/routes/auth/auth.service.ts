@@ -1,15 +1,17 @@
 import { Injectable, UnprocessableEntityException } from '@nestjs/common'
+import { addMilliseconds } from 'date-fns'
+import ms from 'ms'
+
+import envConfig from 'src/shared/config'
 import { HashingService } from 'src/shared/services/hashing.service'
 import { RolesService } from './roles.service'
 import { generateOTP, isUniqueConstraintPrismaError } from 'src/shared/helper'
-import { RegisterBodyType, SendOTPBodyType } from './auth.model'
+import { LoginBodyType, RegisterBodyType, SendOTPBodyType } from './auth.model'
 import { AuthRepository } from './auth.repo'
 import { SharedUserRepository } from 'src/shared/repositories/shared-user.repo'
-import { addMilliseconds } from 'date-fns'
-import ms from 'ms'
-import envConfig from 'src/shared/config'
 import { TypeOfVerificationCode } from 'src/shared/constants/auth.constant'
-import { EmailService } from 'src/shared/services/email.service'
+import { TokenService } from 'src/shared/services/token.service'
+import { AccessTokenPayloadCreate } from 'src/shared/types/jwt.type'
 
 @Injectable()
 export class AuthService {
@@ -18,7 +20,8 @@ export class AuthService {
     private readonly rolesService: RolesService,
     private readonly authRepository: AuthRepository,
     private readonly sharedUserRepository: SharedUserRepository,
-    private readonly emailService: EmailService,
+    // private readonly emailService: EmailService,
+    private readonly tokenService: TokenService,
   ) {}
 
   async register(body: RegisterBodyType) {
@@ -118,45 +121,72 @@ export class AuthService {
     return verificationCode
   }
 
-  // async login(body: any) {
-  //   const user = await this.prismaService.user.findUnique({
-  //     where: {
-  //       email: body.email,
-  //     },
-  //   })
+  async login(body: LoginBodyType & { userAgent: string; ip: string }) {
+    // 1. Get user including role
+    const user = await this.authRepository.findUniqueUserIncludeRole({
+      email: body.email,
+    })
 
-  //   if (!user) {
-  //     throw new UnauthorizedException('Account does not exist')
-  //   }
+    if (!user) {
+      throw new UnprocessableEntityException([
+        {
+          path: 'email',
+          message: 'Email does not exists',
+        },
+      ])
+    }
 
-  //   const isPasswordMatch = await this.hashingService.compare(body.password, user.password)
-  //   if (!isPasswordMatch) {
-  //     throw new UnprocessableEntityException([
-  //       {
-  //         field: 'password',
-  //         error: 'Password is incorrect',
-  //       },
-  //     ])
-  //   }
-  //   const tokens = await this.generateTokens({ userId: user.id })
-  //   return tokens
-  // }
+    // 2. Verify password
+    const isPasswordMatch = await this.hashingService.compare(body.password, user.password)
+    if (!isPasswordMatch) {
+      throw new UnprocessableEntityException([
+        {
+          field: 'password',
+          error: 'Password is incorrect',
+        },
+      ])
+    }
 
-  // async generateTokens(payload: { userId: number }) {
-  //   const [accessToken, refreshToken] = await Promise.all([
-  //     this.tokenService.signAccessToken(payload),
-  //     this.tokenService.signRefreshToken(payload),
-  //   ])
-  //   const decodedRefreshToken = await this.tokenService.verifyRefreshToken(refreshToken)
-  //   await this.prismaService.refreshToken.create({
-  //     data: {
-  //       token: refreshToken,
-  //       userId: payload.userId,
-  //       expiresAt: new Date(decodedRefreshToken.exp * 1000),
-  //     },
-  //   })
-  //   return { accessToken, refreshToken }
-  // }
+    // 3. Create device in db
+    const device = await this.authRepository.createDEvice({
+      userId: user.id,
+      userAgent: body.userAgent,
+      ip: body.ip,
+    })
+
+    // 4. Generate tokens
+    const tokens = await this.generateTokens({
+      userId: user.id,
+      deviceId: device.id,
+      roleId: user.roleId,
+      roleName: user.role.name,
+    })
+
+    return tokens
+  }
+
+  async generateTokens({ userId, deviceId, roleId, roleName }: AccessTokenPayloadCreate) {
+    const [accessToken, refreshToken] = await Promise.all([
+      this.tokenService.signAccessToken({
+        userId,
+        deviceId,
+        roleId,
+        roleName,
+      }),
+      this.tokenService.signRefreshToken({
+        userId,
+      }),
+    ])
+
+    const decodedRefreshToken = await this.tokenService.verifyRefreshToken(refreshToken)
+    await this.authRepository.createRefreshToken({
+      token: refreshToken,
+      userId,
+      expiresAt: new Date(decodedRefreshToken.exp * 1000),
+      deviceId: 1,
+    })
+    return { accessToken, refreshToken }
+  }
 
   // async refreshToken(refreshToken: string) {
   //   try {

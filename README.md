@@ -19,3 +19,5 @@ Shopee Clone API
 - Autentication & Authorization: JWT (role & permissions)
 - Verification: OTP code (register, forgot_password)
 - Send email: Resend, React email
+
+Bài 57: Logic cơ bản chức năng Login [Login Part 1]
